@@ -21,14 +21,9 @@ package de.rwth.idsg.steve.service;
 import de.rwth.idsg.steve.ocpp.OcppProtocol;
 import de.rwth.idsg.steve.repository.OcppServerRepository;
 import de.rwth.idsg.steve.repository.SettingsRepository;
-import de.rwth.idsg.steve.repository.dto.InsertConnectorStatusParams;
-import de.rwth.idsg.steve.repository.dto.InsertTransactionParams;
-import de.rwth.idsg.steve.repository.dto.UpdateChargeboxParams;
-import de.rwth.idsg.steve.repository.dto.UpdateTransactionParams;
-import de.rwth.idsg.steve.service.notification.OccpStationBooted;
-import de.rwth.idsg.steve.service.notification.OcppStationStatusFailure;
-import de.rwth.idsg.steve.service.notification.OcppTransactionEnded;
-import de.rwth.idsg.steve.service.notification.OcppTransactionStarted;
+import de.rwth.idsg.steve.repository.TransactionRepository;
+import de.rwth.idsg.steve.repository.dto.*;
+import de.rwth.idsg.steve.service.notification.*;
 import jooq.steve.db.enums.TransactionStopEventActor;
 import lombok.extern.slf4j.Slf4j;
 import ocpp.cs._2015._10.AuthorizationStatus;
@@ -61,6 +56,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -73,6 +69,7 @@ public class CentralSystemService16_Service {
 
     @Autowired private OcppServerRepository ocppServerRepository;
     @Autowired private SettingsRepository settingsRepository;
+    @Autowired private TransactionRepository transactionRepository;
 
     @Autowired private OcppTagService ocppTagService;
     @Autowired private ApplicationEventPublisher applicationEventPublisher;
@@ -146,6 +143,26 @@ public class CentralSystemService16_Service {
             applicationEventPublisher.publishEvent(new OcppStationStatusFailure(
                     chargeBoxIdentity, parameters.getConnectorId(), parameters.getErrorCode().value()));
         }
+
+        if (parameters.getStatus() == ChargePointStatus.SUSPENDED_EV) {
+            // Find associated TransactionDetails with SuspendedEV status notification
+            List<Integer> activeTransactionsForChargebox = transactionRepository.getActiveTransactionIds(chargeBoxIdentity);
+
+
+            for (int i = 0; i < activeTransactionsForChargebox.size(); i++) {
+                TransactionDetails foundTransaction = transactionRepository.getDetails(activeTransactionsForChargebox.get(i));
+                if (foundTransaction.getTransaction().getConnectorId() == parameters.getConnectorId()) {
+                    applicationEventPublisher.publishEvent(new OcppStationSuspendedEv(
+                            chargeBoxIdentity,
+                            parameters.getConnectorId(),
+                            foundTransaction
+                    ));
+                }
+            }
+
+
+        }
+
 
         return new StatusNotificationResponse();
     }

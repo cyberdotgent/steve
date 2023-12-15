@@ -22,13 +22,9 @@ import com.google.common.base.Strings;
 import de.rwth.idsg.steve.NotificationFeature;
 import de.rwth.idsg.steve.repository.dto.InsertTransactionParams;
 import de.rwth.idsg.steve.repository.dto.MailSettings;
+import de.rwth.idsg.steve.repository.dto.TransactionDetails;
 import de.rwth.idsg.steve.repository.dto.UpdateTransactionParams;
-import de.rwth.idsg.steve.service.notification.OccpStationBooted;
-import de.rwth.idsg.steve.service.notification.OcppStationStatusFailure;
-import de.rwth.idsg.steve.service.notification.OcppStationWebSocketConnected;
-import de.rwth.idsg.steve.service.notification.OcppStationWebSocketDisconnected;
-import de.rwth.idsg.steve.service.notification.OcppTransactionEnded;
-import de.rwth.idsg.steve.service.notification.OcppTransactionStarted;
+import de.rwth.idsg.steve.service.notification.*;
 import lombok.extern.slf4j.Slf4j;
 import org.joda.time.DateTime;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +37,7 @@ import static de.rwth.idsg.steve.NotificationFeature.OcppStationWebSocketConnect
 import static de.rwth.idsg.steve.NotificationFeature.OcppStationWebSocketDisconnected;
 import static de.rwth.idsg.steve.NotificationFeature.OcppTransactionStarted;
 import static de.rwth.idsg.steve.NotificationFeature.OcppTransactionEnded;
+import static de.rwth.idsg.steve.NotificationFeature.OcppStationSuspendedEv;
 import static java.lang.String.format;
 
 /**
@@ -126,6 +123,33 @@ public class NotificationService {
         mailService.sendAsync(subject, addTimestamp(createContent(notification.getParams())));
     }
 
+    @EventListener
+    public void ocppStationSuspendedEv(OcppStationSuspendedEv notification){
+        if (isDisabled(OcppStationSuspendedEv)) {
+            return;
+        }
+
+        String subject = format("Connected device suspended charging on transaction '%s' on charging station '%s'",
+                notification.getTransactionDetails().getTransaction().getId(),
+                notification.getTransactionDetails().getTransaction().getChargeBoxId());
+
+        TransactionDetails.MeterValues lastMeterValue =  notification.getTransactionDetails().getValues().get(notification.getTransactionDetails().getValues().size());
+
+
+        StringBuilder sb = new StringBuilder("Connected device suspended charging").append(System.lineSeparator()).append(System.lineSeparator())
+                        .append("Details: ").append(System.lineSeparator())
+                        .append("- chargeBoxId: ").append(notification.getChargeBoxId()).append(System.lineSeparator())
+                        .append("- connectorId: ").append(notification.getConnectorId()).append(System.lineSeparator())
+                        .append("- idTag: ").append(notification.getTransactionDetails().getTransaction().getOcppIdTag()).append(System.lineSeparator())
+                        .append("- startTimeStamp: ").append(notification.getTransactionDetails().getTransaction().getStartTimestamp()).append(System.lineSeparator())
+                        .append("- startMetervalue: ").append(notification.getTransactionDetails().getTransaction().getStartValue()).append(System.lineSeparator())
+                        .append("- lastMeterValueTimestamp: ").append(lastMeterValue.getValueTimestamp()).append(System.lineSeparator())
+                        .append("- lastMeterValue: ").append(lastMeterValue.getValue()).append(System.lineSeparator())
+                        .append("- sessionConsumption: ").append(Float.parseFloat(lastMeterValue.getValue()) - Float.parseFloat(notification.getTransactionDetails().getTransaction().getStartValue())).append(System.lineSeparator());
+
+        mailService.sendAsync(subject, addTimestamp(sb.toString()));
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
@@ -137,7 +161,7 @@ public class NotificationService {
             .append("- connectorId: ").append(params.getConnectorId()).append(System.lineSeparator())
             .append("- idTag: ").append(params.getIdTag()).append(System.lineSeparator())
             .append("- startTimestamp: ").append(params.getStartTimestamp()).append(System.lineSeparator())
-            .append("- startMeterValue: ").append(params.getStartMeterValue());
+            .append("- startMeterValue: ").append(params.getStartMeterValue()).append(System.lineSeparator());
 
         if (params.isSetReservationId()) {
             sb.append(System.lineSeparator()).append("- reservationId: ").append(params.getReservationId());

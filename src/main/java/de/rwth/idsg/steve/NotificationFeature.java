@@ -35,7 +35,8 @@ public enum NotificationFeature {
     OcppStationWebSocketConnected(" a JSON charging station connects"),
     OcppStationWebSocketDisconnected(" a JSON charging station disconnects"),
     OcppTransactionStarted(" a charging station starts a transaction"),
-    OcppTransactionEnded(" a charging station ends a transaction");
+    OcppTransactionEnded(" a charging station ends a transaction"),
+    OcppStationSuspendedEv(" a connected device suspends charging from the device side");
 
 
     @Getter
